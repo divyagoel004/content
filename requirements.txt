@@ -1,0 +1,9 @@
+streamlit
+autogen
+pygments
+pydantic
+langfuse==5.2.3
+trafilatura
+aiohttp
+sentence-transformers
+langchain-core
