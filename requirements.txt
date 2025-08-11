@@ -15,6 +15,7 @@ matplotlib==3.10.3
 faiss-cpu==1.11.0.post1
 bs4==0.0.2
 ag2==0.9.5
+openai==1.93.1
 
 
 
