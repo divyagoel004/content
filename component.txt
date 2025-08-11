@@ -1,0 +1,3 @@
+"Text"  ,"Schematic Diagram" ,"Layout Diagram"  ,"Real-World Photo","Illustration ","Video Clip"  ,"SmartArt Graphic " ,"Flowchart Diagram"  ,
+"User Journey Diagram"  ,"Technical Architecture Diagram " ,"Mathematical Equations " ,"Code Snippet " ,"Interactive Simulation ", 
+"Infographic " ,"Table " ,"Chart or Graph " ,"Animated GIF"  ,"3D Model " ,"Decision Tree Diagram" 

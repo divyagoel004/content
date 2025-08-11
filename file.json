@@ -1,0 +1,63 @@
+{ 
+
+  "Definition": ["Text", "Infographic"], 
+
+  "Historical Overview": ["Text", "Infographic", "Chart or Graph"], 
+
+  "Evolution": ["Text", "Chart or Graph", "Animated GIF"], 
+
+  "Fundamentals": ["Text", "Schematic Diagram", "Flowchart Diagram", "Mathematical Equations"], 
+
+  "Key Concepts": ["Text", "SmartArt Graphic", "Mathematical Equations"], 
+
+  "Terminology": ["Table", "Text"], 
+
+  "Architecture & Layout": ["Technical Architecture Diagram", "Layout Diagram", "3D Model"], 
+
+  "Components": ["Schematic Diagram", "Illustration", "3D Model"], 
+
+  "Methodologies": ["Flowchart Diagram", "SmartArt Graphic", "Text"], 
+
+  "Processes": ["Flowchart Diagram", "Text"], 
+
+  "Tools & Technologies": ["Table", "Code Snippet", "Illustration"], 
+
+  "Standards & Protocols": ["Table", "Text"], 
+
+  "Applications": ["Real-World Photo", "Infographic", "Video Clip"], 
+
+  "Use Cases": ["Illustration", "Text", "Video Clip"], 
+
+  "Industry Examples": ["Real-World Photo", "Text", "Video Clip"], 
+
+  "Advantages": ["Text", "Chart or Graph"], 
+
+  "Limitations": ["Text", "Chart or Graph"], 
+
+  "Best Practices": ["SmartArt Graphic", "Text"], 
+
+  "Emerging Trends": ["Text", "Chart or Graph", "Infographic"], 
+
+  "Case Studies": ["Text", "Illustration", "Video Clip"], 
+
+  "Comparative Analysis": ["Table", "Chart or Graph", "Decision Tree Diagram "], 
+
+  "Metrics & KPIs": ["Table", "Chart or Graph", "Mathematical Equations"], 
+
+  "Prerequisites": ["Table", "Text"], 
+
+  "Target Audience": ["Text", "Illustration", "Infographic"], 
+
+  "Code Examples": ["Code Snippet", "Text"], 
+
+  "Practical Implementation": ["Code Snippet", "Interactive Simulation", "Video Clip"], 
+
+  "Working Mechanism": ["Technical Architecture Diagram", "Flowchart Diagram", "Schematic Diagram"], 
+
+  "Activities": ["Interactive Simulation", "Flowchart Diagram", "Text"], 
+
+  "Exercises": ["Interactive Simulation", "Table", "Text"], 
+
+  "Deployment Scenarios": ["Technical Architecture Diagram", "Illustration", "Video Clip"] 
+
+} 

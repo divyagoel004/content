@@ -1,0 +1,12 @@
+[
+  {
+    "model": "llama-3.3-70b-versatile",
+    "api_key": "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",
+    "base_url": "https://api.groq.com/openai/v1"
+  },
+  {
+    "model": "llama-3.3-70b-versatile",
+    "api_key": "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",
+    "base_url": "https://api.groq.com/openai/v1"
+  }
+]
