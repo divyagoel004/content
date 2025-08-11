@@ -12,6 +12,8 @@ langchain-core==0.3.68
 langchain_community==0.3.27
 google-genai==1.29.0
 matplotlib==3.10.3
+faiss-cpu==1.11.0.post1
+
 
 
 
