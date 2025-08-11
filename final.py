@@ -8,7 +8,7 @@ from io import BytesIO
 import numpy as np
 import os
 import re
-import pptx
+
 from agent import search_and_embed
 from pygments import highlight
 from pygments.lexers import PythonLexer
@@ -2434,4 +2434,5 @@ def main():
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
+
     main()
