@@ -31,9 +31,7 @@ from langchain_core.prompts import PromptTemplate
 import re
 
 # New imports for DuckDuckGo search and vector database
-from duckduckgo_search import DDGS
-import chromadb
-from chromadb.utils import embedding_functions
+
 import hashlib
 from urllib.parse import urljoin, urlparse
 import trafilatura
@@ -55,27 +53,27 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Initialize vector database
-@st.cache_resource
-def initialize_vector_db():
-    """Initialize ChromaDB client and collection"""
-    client = chromadb.PersistentClient(path="./chroma_db")
+# @st.cache_resource
+# def initialize_vector_db():
+#     """Initialize ChromaDB client and collection"""
+#     client = chromadb.PersistentClient(path="./chroma_db")
     
-    # Create embedding function
-    sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
+#     # Create embedding function
+#     sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+#         model_name="all-MiniLM-L6-v2"
+#     )
     
-    collection = client.get_or_create_collection(
-        name="presentation_content",
-        embedding_function=sentence_transformer_ef
-    )
+#     collection = client.get_or_create_collection(
+#         name="presentation_content",
+#         embedding_function=sentence_transformer_ef
+#     )
     
-    return client, collection
+#     return client, collection
 
-# Initialize sentence transformer for content processing
-@st.cache_resource
-def load_sentence_transformer():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+# # Initialize sentence transformer for content processing
+# @st.cache_resource
+# def load_sentence_transformer():
+#     return SentenceTransformer('all-MiniLM-L6-v2')
 
 # Streamlit page config for wide layout
 st.set_page_config(layout="wide", page_title="AI Presentation Studio", page_icon="🎯")
@@ -303,8 +301,8 @@ if 'comments' not in st.session_state:
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Initialize vector database
-vector_client, collection = initialize_vector_db()
-sentence_model = load_sentence_transformer()
+# vector_client, collection = initialize_vector_db()
+# sentence_model = load_sentence_transformer()
 
 
 def generate_mermaid_diagram(payload: dict, vm_ip: str = "40.81.228.142:5500") -> str:
@@ -2436,3 +2434,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
