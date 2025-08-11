@@ -9,3 +9,5 @@ trafilatura==2.0.0
 aiohttp==3.12.14
 sentence-transformers==5.0.0
 langchain-core==0.3.68
+langchain_community==0.3.27
+
