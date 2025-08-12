@@ -31,9 +31,9 @@ from langchain_core.prompts import PromptTemplate
 import re
 
 # New imports for DuckDuckGo search and vector database
-from duckduckgo_search import DDGS
-import chromadb
-from chromadb.utils import embedding_functions
+# from duckduckgo_search import DDGS
+# import chromadb
+# from chromadb.utils import embedding_functions
 import hashlib
 from urllib.parse import urljoin, urlparse
 import trafilatura
@@ -2589,3 +2589,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
