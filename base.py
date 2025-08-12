@@ -58,12 +58,16 @@ def serper_search(topic, max_results_per_type=5):
             text = f"{title}\n{snippet}"
 
         if len(text) >= 300:
-            text_blocks.append(text[1000:3000])  # Limit to 2000 characters
-            metadata_blocks.append({
-                "type": ctype,
-                "source": url,
-                "summary": text[:1000]
-            })
+            from textwrap import wrap
+            chunks = wrap(text, 2000)  # split into 2000-character chunks
+            for chunk in chunks:
+                text_blocks.append(chunk)
+                metadata_blocks.append({
+                    "type": ctype,
+                    "source": url,
+                    "summary": chunk[:500]
+                })
+
 
     if text_blocks:
         print("[Vector Store] Storing extracted documents...")
@@ -122,4 +126,5 @@ def query_vector_db(user_query, top_k=5):
                 + "=" * 80
             )
     return results
+
 
