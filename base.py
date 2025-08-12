@@ -58,11 +58,11 @@ def serper_search(topic, max_results_per_type=5):
             text = f"{title}\n{snippet}"
 
         if len(text) >= 300:
-            text_blocks.append(text[:10000])  # Limit to 2000 characters
+            text_blocks.append(text[1000:3000])  # Limit to 2000 characters
             metadata_blocks.append({
                 "type": ctype,
                 "source": url,
-                "summary": text[:10000]
+                "summary": text[:1000]
             })
 
     if text_blocks:
@@ -122,3 +122,4 @@ def query_vector_db(user_query, top_k=5):
                 + "=" * 80
             )
     return results
+
