@@ -1913,9 +1913,13 @@ def render_editing_panel():
                                         
                                     img = img.resize((int(scaled_w), int(scaled_h)), Image.Resampling.LANCZOS)
                                     img.save(img_path, 'PNG', optimize=True)
-                                    st.image(img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
+                                    
+                                    
                                     # Update section with new image path
-                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = img
+                                    img_path = f"graph_{int(time.time())}.png"
+                                    img.save(img_path, "PNG", optimize=True)
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
+                                    st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
                                     st.session_state.slides[slide_index].content_sections[section_index]['mermaid_code'] = mermaid_code
                                     
                                 else:
@@ -2005,15 +2009,20 @@ def render_editing_panel():
                                 # Generate new image
                                 import time
                                 timestamp = int(time.time())
-                                img_filename = f"equation_regenerated_{timestamp}.png"
-                                img_path = os.path.abspath(img_filename)
+                                img_path = f"graph_{int(time.time())}.png"
+                                
+                                
                                 
                                 rendered_path = render_latex_to_image(latex_equation, img_path)
                                 img.save(rendered_path, 'PNG', optimize=True)
-                                st.image(img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
                                 
+                                
+                                    # Update section with new image path
+                                    
                                 if rendered_path and os.path.exists(rendered_path):
-                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = img
+                                    
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
+                                    st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
                                     
                                     # Update description if it exists in the next section
                                     if section_index + 1 < len(st.session_state.slides[slide_index].content_sections):
@@ -2080,8 +2089,13 @@ def render_editing_panel():
                                         
                                         if os.path.exists(img_path):
                                             
-                                            st.image(photo_img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
-                                            st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
+                                            
+
+                                            img_path = f"graph_{int(time.time())}.png"
+                                            img.save(img_path, "PNG", optimize=True)
+                                            st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
+                                            st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
+
                                             photo_generated = True
                                             break
                                 
