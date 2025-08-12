@@ -28,7 +28,7 @@ start_cleanup_daemon()
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-import re
+
 
 # New imports for DuckDuckGo search and vector database
 # from duckduckgo_search import DDGS
@@ -907,7 +907,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                     "editable": True,
                     "component_name": component
                 })
-                import re
+               
             elif component.lower() == "text" and content_type.lower() != "definition":
                 p = f"""
                         Use this research context only as a reference:
@@ -1234,7 +1234,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         print(f"DEBUG: Raw model output: {response_text!r}")
 
                         # Try extracting code using regex if JSON is malformed
-                        import re
+                        
                         code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
                         if code_match:
                             mermaid_code = code_match.group(1)
@@ -1532,7 +1532,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         print(f"DEBUG: Raw model output: {raw_text!r}")
 
                         # Try regex-based extraction
-                        import re
+                        
                         topic_match = re.search(r'"graph_topic"\s*:\s*"([^"]+)"', raw_text)
                         type_match = re.search(r'"graph_type"\s*:\s*"([^"]+)"', raw_text)
 
@@ -1882,7 +1882,7 @@ def render_editing_panel():
                                     print(f"DEBUG: Raw model output: {response_text!r}")
 
                                     # Try extracting code using regex if JSON is malformed
-                                    import re
+                                    
                                     code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
                                     if code_match:
                                         mermaid_code = code_match.group(1)
@@ -2290,7 +2290,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-import re
+
 
 # ---------- helper ----------
 def boldify(text: str) -> str:
@@ -2325,7 +2325,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-import re
+
 
 # ---------- helper ----------
 def boldify(text: str) -> str:
