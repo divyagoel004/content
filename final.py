@@ -1828,7 +1828,7 @@ def render_editing_panel():
                         component_name = section.get('component_name', 'text').lower()
                         
                         # Handle different content types
-                        if section['type'] == 'diagram' or 'diagram' in component_name or 'chart' in component_name or 'flow' in component_name or 'illustration' in component_name:
+                        if section['type'] == 'diagram' or 'diagram' in component_name or 'chart' in component_name or 'flow' in component_name or 'illustration' in component_name or 'graph' in component_name:
                             # Regenerate diagram/chart content
                             try:
                                 context_block = get_top_image_contexts(
@@ -1864,8 +1864,30 @@ def render_editing_panel():
                                 )
                                 
                                 # Parse JSON response
-                                mermaid_json = json.loads(response.text.strip())
-                                mermaid_code = mermaid_json['code']
+                                response_text = response.text.strip()
+
+# Remove markdown fences if present
+                                if response_text.startswith("```") and response_text.endswith("```"):
+                                    response_text = "\n".join(line for line in response_text.splitlines() if not line.strip().startswith("```")).strip()
+
+                                try:
+                                    mermaid_json = json.loads(response_text)
+                                    if not isinstance(mermaid_json, dict) or "code" not in mermaid_json:
+                                        raise ValueError("Invalid JSON structure or missing 'code' field")
+                                    
+                                    mermaid_code = mermaid_json["code"]
+
+                                except json.JSONDecodeError as json_err:
+                                    print(f"DEBUG: JSON parsing failed: {json_err}")
+                                    print(f"DEBUG: Raw model output: {response_text!r}")
+
+                                    # Try extracting code using regex if JSON is malformed
+                                    import re
+                                    code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
+                                    if code_match:
+                                        mermaid_code = code_match.group(1)
+                                    else:
+                                        raise ValueError("Could not extract 'code' from model output")
                                 
                                 # Generate new diagram image
                                 svg = generate_mermaid_diagram({"code": mermaid_code})
@@ -2289,7 +2311,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from PIL import Image as PILImage
 import os
-import re
+
 import uuid
 
 # ---------- helper ----------
@@ -2589,4 +2611,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
