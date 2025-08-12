@@ -109,7 +109,7 @@ def store_in_vector_db(text_blocks, metadata_blocks):
 from collections import defaultdict
 from textwrap import shorten
 
-def query_vector_db(user_query, top_k=10, chunk_limit=800):
+def query_vector_db(user_query, top_k=10, chunk_limit=500):
     """
     Query FAISS DB and return concise, merged results to reduce LLM token usage.
 
@@ -148,6 +148,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=800):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
