@@ -63,8 +63,9 @@ def serper_search(topic, max_results_per_type=5):
             for chunk in chunks:
                 text_blocks.append(chunk)
                 metadata_blocks.append({
-                   
-                    "summary": chunk[:500]
+                    "type": ctype,
+                    "source": url,
+                    "summary": chunk[:300]
                 })
 
 
