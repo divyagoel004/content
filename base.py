@@ -59,7 +59,7 @@ def serper_search(topic, max_results_per_type=5):
 
         if len(text) >= 300:
             from textwrap import wrap
-            chunks = wrap(text, 2000)  # split into 2000-character chunks
+            chunks = wrap(text, 800)  # split into 2000-character chunks
             for chunk in chunks:
                 text_blocks.append(chunk)
                 metadata_blocks.append({
@@ -148,6 +148,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
