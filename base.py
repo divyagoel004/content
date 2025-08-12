@@ -106,25 +106,49 @@ def store_in_vector_db(text_blocks, metadata_blocks):
     with open(INDEX_METADATA_PATH, "wb") as f:
         pickle.dump(metadata, f)
 
-def query_vector_db(user_query, top_k=5):
+from collections import defaultdict
+from textwrap import shorten
+
+def query_vector_db(user_query, top_k=10, chunk_limit=800):
+    """
+    Query FAISS DB and return concise, merged results to reduce LLM token usage.
+
+    Args:
+        user_query (str): Search query.
+        top_k (int): Number of unique documents to return.
+        chunk_limit (int): Max characters per document summary.
+    """
     if not os.path.exists(VECTOR_DB_PATH):
         return ["[ERROR] Vector DB is empty. Please run a search first."]
 
+    # Load FAISS index and metadata
     index = faiss.read_index(VECTOR_DB_PATH)
     with open(INDEX_METADATA_PATH, "rb") as f:
         metadata = pickle.load(f)
 
+    # Encode query & search (over-fetch for deduplication)
     query_embedding = model.encode([user_query]).astype("float32")
-    D, I = index.search(query_embedding, top_k)
+    D, I = index.search(query_embedding, top_k * 3)
 
-    results = []
+    # Merge chunks per source
+    docs = defaultdict(list)
     for idx in I[0]:
         if idx < len(metadata):
             entry = metadata[idx]
-            results.append(
-                f"TYPE: {entry['type'].upper()}\nURL: {entry['source']}\nSUMMARY:\n{entry['summary']}\n"
-                + "=" * 80
-            )
-    return results
+            docs[entry['source']].append(entry['summary'])
+
+    # Combine & trim
+    results = []
+    for source, chunks in docs.items():
+        # Keep order stable
+        combined_text = " ".join(chunks)
+        # Shorten for token efficiency
+        concise_text = shorten(combined_text, width=chunk_limit, placeholder="...")
+        results.append(f"{source}\n\n{concise_text}")
+
+    # Return only top_k unique documents
+    return results[:top_k]
+
+
 
 
