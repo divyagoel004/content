@@ -31,7 +31,9 @@ from langchain_core.prompts import PromptTemplate
 import re
 
 # New imports for DuckDuckGo search and vector database
-
+from duckduckgo_search import DDGS
+import chromadb
+from chromadb.utils import embedding_functions
 import hashlib
 from urllib.parse import urljoin, urlparse
 import trafilatura
@@ -838,6 +840,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
         
         for component_idx, component in enumerate(components):
             # Create component-level span
+            
             component_span = langfuse.span(
                 trace_id=trace.id,
                 name=f"generate_component_{component_idx}",
@@ -904,7 +907,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                     "editable": True,
                     "component_name": component
                 })
-
+                import re
             elif component.lower() == "text" and content_type.lower() != "definition":
                 p = f"""
                         Use this research context only as a reference:
@@ -1028,6 +1031,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                 })
                 
             elif component.lower() == "mathematical equations":
+                import os
                 heading = f"**{component}**"
                 
                 content_sections.append({
@@ -1096,7 +1100,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         output={
                             "raw_output": out,
                             "latex_equation": latex_equation,
-                            "description": description
+                            # "description": description
                         }
                     )
                     
@@ -1155,10 +1159,10 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         "component_name": component
                     })
                     
-            elif "diagram" in component.lower() or "chart" in component.lower() or "flow" in component.lower() or "table" in component.lower() or "illustration" in component.lower():
+            elif "diagram" in component.lower()  or "flow" in component.lower() or "table" in component.lower() or "illustration" in component.lower():
                 # Generate mermaid diagram
                 heading = f"**{component}**"
-                
+                import json
                 context_block = get_top_image_contexts(topic, content_type, component, top_k=10)
                 
                 try:
@@ -1212,9 +1216,33 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         contents=mer,
                         config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8, top_p=0.9)
                     )
-                    
-                    mermaid_json = json.loads(response.text)
-                    mermaid_code = mermaid_json['code']
+                    response_text = response.text.strip()
+
+# Remove markdown fences if present
+                    if response_text.startswith("```") and response_text.endswith("```"):
+                        response_text = "\n".join(line for line in response_text.splitlines() if not line.strip().startswith("```")).strip()
+
+                    try:
+                        mermaid_json = json.loads(response_text)
+                        if not isinstance(mermaid_json, dict) or "code" not in mermaid_json:
+                            raise ValueError("Invalid JSON structure or missing 'code' field")
+                        
+                        mermaid_code = mermaid_json["code"]
+
+                    except json.JSONDecodeError as json_err:
+                        print(f"DEBUG: JSON parsing failed: {json_err}")
+                        print(f"DEBUG: Raw model output: {response_text!r}")
+
+                        # Try extracting code using regex if JSON is malformed
+                        import re
+                        code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
+                        if code_match:
+                            mermaid_code = code_match.group(1)
+                        else:
+                            raise ValueError("Could not extract 'code' from model output")
+
+                    # mermaid_json = json.loads(response.text)
+                    # mermaid_code = mermaid_json['code']
                     
                     # Generate diagram image
                     svg = generate_mermaid_diagram({"code": mermaid_code})
@@ -1428,6 +1456,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                         raise Exception("No photo was generated from the response")
                     
                     photo_generation_span.end()
+                
                         
                 except Exception as e:
                     print(f"DEBUG: Photo generation failed: {e}")
@@ -1437,12 +1466,156 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
                             output={"error": str(e), "generation_success": False}
                         )
                         photo_generation_span.end()
-            
-            # End component span
-            component_span.update(
+                
+            elif component.lower() == "graph" or "graph" in component.lower():
+                
+              
+                try:
+                    topic = topic
+                    content_type = content_type.strip()
+                    knowledge_base = knowledge_base if knowledge_base else ""
+
+                    # ===== STEP 1: Get graph topic & type =====
+                    graph_prompt = f"""
+                    You are a senior market research analyst and data visualization strategist.
+
+                    Your goal: For the given topic and knowledge base, create a *meaningful, insightful, and data-rich* graph idea 
+                    that captures trends, comparisons, or forecasts that would be valuable to decision-makers.
+
+                    Rules for graph_topic:
+                    - It must be specific and research-oriented (e.g., "Global AI Market Size Projection 2024–2030").
+                    - It should relate to measurable trends, comparisons, or statistics.
+                    - Avoid generic terms like "AI statistics" or "Graph about AI".
+
+                    Rules for graph_type:
+                    - Choose the type that best represents the data (Pie Chart, Bar Chart, Line Chart, Area Chart, Scatter Plot, Histogram).
+
+                    Topic: "{topic}"
+                    Content Type: "{content_type}"
+                    Knowledge Base: "{knowledge_base}"
+
+                    Respond in JSON with:
+                    {{
+                        "graph_topic": "...",
+                        "graph_type": "..."
+                    }}
+                    No extra data or text or space
+                    """
+                    graph_type_response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=graph_prompt,
+                        config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8, top_p=0.9)
+                    )
+
+                    import json
+                    raw_text = graph_type_response.text.strip()
+
+# Remove markdown fences if model added them
+                    if raw_text.startswith("```") and raw_text.endswith("```"):
+                        raw_text = "\n".join(
+                            line for line in raw_text.splitlines()
+                            if not line.strip().startswith("```")
+                        ).strip()
+
+                    try:
+                        graph_info = json.loads(raw_text)
+                        if not isinstance(graph_info, dict):
+                            raise ValueError("Invalid JSON structure: not a dictionary")
+                        if "graph_topic" not in graph_info or "graph_type" not in graph_info:
+                            raise ValueError("Missing required keys in JSON")
+
+                        graph_topic = graph_info["graph_topic"]
+                        graph_type = graph_info["graph_type"]
+
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: Failed to parse JSON: {e}")
+                        print(f"DEBUG: Raw model output: {raw_text!r}")
+
+                        # Try regex-based extraction
+                        import re
+                        topic_match = re.search(r'"graph_topic"\s*:\s*"([^"]+)"', raw_text)
+                        type_match = re.search(r'"graph_type"\s*:\s*"([^"]+)"', raw_text)
+
+                        if topic_match and type_match:
+                            graph_topic = topic_match.group(1)
+                            graph_type = type_match.group(1)
+                        else:
+                            raise ValueError("Could not extract graph_topic and graph_type from model output")
+
+
+                    # ===== STEP 2: Serper API Google Image Search =====
+                    import requests, os, time , json
+
+                    SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+                    if not SERPER_API_KEY:
+                        raise ValueError("SERPER_API_KEY not set in environment variables.")
+
+                    query = f"{graph_topic} {graph_type} chart"
+
+                    url = "https://google.serper.dev/images"
+                    headers = {
+                        "X-API-KEY": SERPER_API_KEY,
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "q": query,
+                        "num": 5
+                    }
+
+                    resp = requests.post(url, headers=headers, json=payload)
+                    data = resp.json()
+
+                    from PIL import Image, UnidentifiedImageError
+                    import io
+
+                    if "images" in data and data["images"]:
+                        image_url = data["images"][0]["imageUrl"]  # pick the top result
+                        img_filename = f"graph_{int(time.time())}.png"
+                        img_path = os.path.abspath(img_filename)
+
+                        try:
+                            # Download
+                            img_data = requests.get(image_url, timeout=10).content
+
+                            # Verify before saving
+                            img_buffer = io.BytesIO(img_data)
+                            try:
+                                with Image.open(img_buffer) as test_img:
+                                    test_img.verify()  # quick integrity check
+                            except (UnidentifiedImageError, OSError) as img_err:
+                                print(f"DEBUG: Skipping invalid image from {image_url}: {img_err}")
+                                continue  # skip to next image/component
+
+                            # If valid, reopen for saving
+                            img_buffer.seek(0)
+                            with Image.open(img_buffer) as img:
+                                img.save(img_path, "PNG", optimize=True)
+
+                            if os.path.exists(img_path):
+                                content_sections.append({
+                                    "type": "image",
+                                    "content": img_path,
+                                    "editable": True,
+                                    "component_name": component,
+                                    "graph_topic": graph_topic,
+                                    "graph_type": graph_type
+                                })
+                                print(f"DEBUG: Successfully saved and added valid image: {img_path}")
+                            else:
+                                print(f"DEBUG: Image file not created: {img_path}")
+                        except Exception as e:
+                            print(f"DEBUG: Graph generation failed: {e}")
+
+                except Exception as e:
+                            print(f"DEBUG: Graph generation failed: {e}")
+
+
+                        
+                        # End component span
+        component_span.update(
                 output={"content_sections_added": len([cs for cs in content_sections if cs.get("component_name") == component])}
-            )
-            component_span.end()
+                        )
+        component_span.end()
         
         # Create slide object
         slide = Slide(slide_title.strip(), content_sections, slide_number)
@@ -1626,9 +1799,9 @@ def render_editing_panel():
         # Edit options
         edit_type = st.sidebar.selectbox("Edit Type:", [
             "Regenerate with AI",
-            "Add more detail",
-            "Simplify content",
-            "Custom instruction"
+            # "Add more detail",
+            # "Simplify content",
+            # "Custom instruction"
         ])
         
         if edit_type == "Custom instruction":
@@ -1718,16 +1891,35 @@ def render_editing_panel():
                                         
                                     img = img.resize((int(scaled_w), int(scaled_h)), Image.Resampling.LANCZOS)
                                     img.save(img_path, 'PNG', optimize=True)
-                                    
+                                    st.image(img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
                                     # Update section with new image path
-                                    st.session_state.slides[slide_index].content_sections[section_index]['content'] = img_path
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = img
                                     st.session_state.slides[slide_index].content_sections[section_index]['mermaid_code'] = mermaid_code
                                     
                                 else:
-                                    raise Exception("Diagram generation failed")
+                                    
+                                    new_content = content_enrichment_agent.generate_reply([
+                                    {
+                                        "role": "user",
+                                        "content": f"""
+                                        Create a detailed text description of what the {component_name} should contain.
+                                        
+                                        {research_context}
+                                        
+                                        Generate content that:
+                                        - Describes the visual concept in clear bullet points
+                                        - Addresses the edit type: {edit_type}
+                                        - Incorporates user feedback: {user_feedback}
+                                        - Uses research findings for accuracy
+                                        """
+                                    }
+                                ])
+                                    st.session_state.slides[slide_index].content_sections[section_index]['content'] = new_content.strip()
+                                    st.session_state.slides[slide_index].content_sections[section_index]['type'] = 'text'
+                            
                                     
                             except Exception as diagram_error:
-                                st.warning(f"Diagram regeneration failed: {diagram_error}. Generating text alternative.")
+                                # st.warning(f"Diagram regeneration failed: {diagram_error}. Generating text alternative.")
                                 # Fallback to text description
                                 new_content = content_enrichment_agent.generate_reply([
                                     {
@@ -1795,9 +1987,11 @@ def render_editing_panel():
                                 img_path = os.path.abspath(img_filename)
                                 
                                 rendered_path = render_latex_to_image(latex_equation, img_path)
+                                img.save(rendered_path, 'PNG', optimize=True)
+                                st.image(img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
                                 
                                 if rendered_path and os.path.exists(rendered_path):
-                                    st.session_state.slides[slide_index].content_sections[section_index]['content'] = rendered_path
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = img
                                     
                                     # Update description if it exists in the next section
                                     if section_index + 1 < len(st.session_state.slides[slide_index].content_sections):
@@ -1863,7 +2057,9 @@ def render_editing_panel():
                                         photo_img.save(img_path, 'PNG', optimize=True)
                                         
                                         if os.path.exists(img_path):
-                                            st.session_state.slides[slide_index].content_sections[section_index]['content'] = img_path
+                                            
+                                            st.image(photo_img, caption=f"Regenerated Diagram: {component_name}", use_column_width=False)
+                                            st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
                                             photo_generated = True
                                             break
                                 
@@ -2210,52 +2406,12 @@ def export_to_pdf():
     except Exception as e:
         st.error(f"Error generating PDF: {e}")
         return None
-# def export_to_pptx():
-#     """Export slides to PowerPoint format"""
-#     try:
-#         from pptx import Presentation
-#         from pptx.util import Inches
-        
-#         # Create presentation
-#         prs = Presentation()
-        
-#         for slide_obj in st.session_state.slides:
-#             slide_layout = prs.slide_layouts[1]  # Title and Content layout
-#             slide = prs.slides.add_slide(slide_layout)
-            
-#             # Set title
-#             title = slide.shapes.title
-#             title.text = slide_obj.title
-            
-#             # Add content
-#             content = slide.shapes.placeholders[1]
-#             tf = content.text_frame
-            
-#             for section in slide_obj.content_sections:
-#                 p = tf.add_paragraph()
-#                 p.text = section['content'][:500] + "..." if len(section['content']) > 500 else section['content']
-        
-#         # Save to bytes
-#         from io import BytesIO
-#         pptx_buffer = BytesIO()
-#         prs.save(pptx_buffer)
-#         pptx_buffer.seek(0)
-        
-#         return pptx_buffer.getvalue()
-    
-#     except ImportError:
-#         st.error("PowerPoint export requires python-pptx package")
-#         return None
-#     except Exception as e:
-#         st.error(f"Error exporting to PowerPoint: {str(e)}")
-#         return None
 
-# Main application
 def main():
     # Header
     st.markdown("""
     <div style="text-align: center; padding: 20px 0; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border-radius: 20px; margin-bottom: 30px;">
-        <h1 style="margin: 0; font-size: 3em;">🎯 AI Presentation Studio</h1>
+        <h1 style="margin: 0; font-size: 3em;">🎯 AI Presentation Creator</h1>
         <p style="margin: 10px 0 0 0; font-size: 1.2em; opacity: 0.9;">Create stunning presentations with AI-powered research</p>
     </div>
     """, unsafe_allow_html=True)
@@ -2305,10 +2461,10 @@ def main():
             st.markdown("---")
             
             # Mode toggle
-            presentation_mode = st.toggle("📺 Presentation Mode", value=st.session_state.presentation_mode)
-            if presentation_mode != st.session_state.presentation_mode:
-                st.session_state.presentation_mode = presentation_mode
-                st.rerun()
+            # presentation_mode = st.toggle("📺 Presentation Mode", value=st.session_state.presentation_mode)
+            # if presentation_mode != st.session_state.presentation_mode:
+            #     st.session_state.presentation_mode = presentation_mode
+            #     st.rerun()
             
             # Export options
             st.markdown("#### Export")
@@ -2324,26 +2480,26 @@ def main():
                         mime="application/pdf"
                     )
             # JSON export (for backup/sharing)
-            if st.button("💾 Export Data"):
-                export_data = {
-                    "slides": [
-                        {
-                            "title": slide.title,
-                            "content_sections": slide.content_sections,
-                            "slide_number": slide.slide_number
-                        }
-                        for slide in st.session_state.slides
-                    ],
-                    "knowledge_base": st.session_state.knowledge_base,
-                    "comments": st.session_state.comments
-                }
+            # if st.button("💾 Export Data"):
+            #     export_data = {
+            #         "slides": [
+            #             {
+            #                 "title": slide.title,
+            #                 "content_sections": slide.content_sections,
+            #                 "slide_number": slide.slide_number
+            #             }
+            #             for slide in st.session_state.slides
+            #         ],
+            #         "knowledge_base": st.session_state.knowledge_base,
+            #         "comments": st.session_state.comments
+            #     }
                 
-                st.download_button(
-                    "⬇️ Download JSON",
-                    data=json.dumps(export_data, indent=2),
-                    file_name=f"presentation_data_{topic.replace(' ', '_')}.json",
-                    mime="application/json"
-                )
+            #     st.download_button(
+            #         "⬇️ Download JSON",
+            #         data=json.dumps(export_data, indent=2),
+            #         file_name=f"presentation_data_{topic.replace(' ', '_')}.json",
+            #         mime="application/json"
+            #     )
             
             # Reset option
             st.markdown("---")
@@ -2432,6 +2588,4 @@ def main():
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-
     main()
-
