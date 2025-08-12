@@ -63,8 +63,7 @@ def serper_search(topic, max_results_per_type=5):
             for chunk in chunks:
                 text_blocks.append(chunk)
                 metadata_blocks.append({
-                    "type": ctype,
-                    "source": url,
+                   
                     "summary": chunk[:500]
                 })
 
@@ -148,6 +147,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
