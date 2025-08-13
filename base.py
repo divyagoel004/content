@@ -21,8 +21,8 @@ HEADERS = {
 from langfuse import Langfuse
 
 langfuse = Langfuse(
-    public_key="pk-lf-ff2508c5-f759-49c2-b1ef-b8c42c3cdd4a",
-    secret_key="sk-lf-29906660-5e8e-4ba1-ab9b-147fa5b270ff",
+    public_key=os.getenv("LANGFUSE_PUBLIC_API_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_API_KEY"),
     host="https://cloud.langfuse.com",
 ) 
 
@@ -172,6 +172,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
