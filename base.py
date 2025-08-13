@@ -97,7 +97,7 @@ def serper_search(topic, max_results_per_type=5):
         print("[Warning] No valid content found.")
         trace.update(output={"warning": "no_valid_content"})
 
-    trace.end()
+    
 
 def extract_text_from_url(url, timeout=10):
     try:
@@ -172,6 +172,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
