@@ -29,11 +29,19 @@ langfuse = Langfuse(
 # Embedding model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def serper_search(topic, max_results_per_type=5):
-    trace = langfuse.trace(
+def serper_search(topic, max_results_per_type=5, parent_span=None):
+    trace = parent_span.span(
+        name="serper_search",
+        input={"topic": topic, "max_results_per_type": max_results_per_type}
+    ) 
+    if parent_span else langfuse.trace(
         name="serper_search",
         input={"topic": topic, "max_results_per_type": max_results_per_type}
     )
+    # trace = langfuse.trace(
+    #     name="serper_search",
+    #     input={"topic": topic, "max_results_per_type": max_results_per_type}
+    # )
 
     try:
         os.environ["SERPER_API_KEY"] = SERPER_API_KEY
@@ -65,7 +73,8 @@ def serper_search(topic, max_results_per_type=5):
                 search_span.update(output={"error": str(e)})
                 print(f"[ERROR] Failed search for '{query}': {e}")
 
-            search_span.end()
+            search_span.update(output={"status": "done"})
+            trace.update(output={"status": "stored"})
 
         text_blocks = []
         metadata_blocks = []
@@ -172,6 +181,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
