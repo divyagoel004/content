@@ -31,11 +31,10 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def serper_search(topic, max_results_per_type=5):
     trace = langfuse.trace(
-        name="serper_search_trace",
-        input=topic,
-        metadata={"max_results_per_type": max_results_per_type}
+        name="serper_search",
+        input={"topic": topic, "max_results_per_type": max_results_per_type}
     )
-
+    os.environ["SERPER_API_KEY"] = SERPER_API_KEY
     search = GoogleSerperAPIWrapper()
     all_results = []
 
@@ -43,7 +42,10 @@ def serper_search(topic, max_results_per_type=5):
         query = f"{topic} {ctype}"
         print(f"[LangChain Serper] Searching: {query}")
 
-        span = trace.span(name=f"search_{ctype}", input=query)
+        search_span = trace.span(
+            name="search_content_type",
+            input={"query": query, "type": ctype}
+        )
         try:
             search_result = search.results(query)
             organic = search_result.get("organic", [])
@@ -52,15 +54,20 @@ def serper_search(topic, max_results_per_type=5):
                 title = r.get("title", "")
                 snippet = r.get("snippet", "")
                 link = r.get("link", "")
+                link_span = search_span.span(
+                    name="search_result",
+                    input={"title": title, "link": link, "snippet": snippet}
+                )
+                link_span.end()
                 urls.append(link)
                 all_results.append((title, snippet, link, ctype))
-            span.update(output={"urls": urls, "count": len(urls)})
+            
         except Exception as e:
-            span.update(output={"error": str(e)})
+            search_span.output = {"error": str(e)}
             print(f"[ERROR] Failed search for '{query}': {e}")
-        span.end()
+        search_span.end()
 
-    trace.update(output={"total_results": len(all_results)})
+    
 
     text_blocks = []
     metadata_blocks = []
@@ -68,10 +75,10 @@ def serper_search(topic, max_results_per_type=5):
     for title, snippet, url, ctype in all_results:
         print(f"[Processing] {ctype.upper()} → {url}")
 
-        scrape_span = trace.span(name="scrape_url", input=url)
+        # scrape_span = trace.span(name="scrape_url", input=url)
         text = extract_text_from_url(url)
-        scrape_span.update(output={"text_length": len(text) if text else 0})
-        scrape_span.end()
+        # scrape_span.update(output={"text_length": len(text) if text else 0})
+        # scrape_span.end()
 
         if not text or len(text) < 300:
             text = f"{title}\n{snippet}"
@@ -89,13 +96,13 @@ def serper_search(topic, max_results_per_type=5):
 
     if text_blocks:
         print("[Vector Store] Storing extracted documents...")
-        store_span = trace.span(name="store_vector_db", input={"num_blocks": len(text_blocks)})
+        # store_span = trace.span(name="store_vector_db", input={"num_blocks": len(text_blocks)})
         store_in_vector_db(text_blocks, metadata_blocks)
-        store_span.update(output={"status": "stored"})
-        store_span.end()
+        # store_span.update(output={"status": "stored"})
+        # store_span.end()
     else:
         print("[Warning] No valid content found.")
-        trace.update(output={"warning": "no_valid_content"})
+        # trace.update(output={"warning": "no_valid_content"})
 
     
 
