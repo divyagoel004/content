@@ -33,8 +33,7 @@ def serper_search(topic, max_results_per_type=5, parent_span=None):
     trace = parent_span.span(
         name="serper_search",
         input={"topic": topic, "max_results_per_type": max_results_per_type}
-    ) 
-    if parent_span else langfuse.trace(
+    ) if parent_span else langfuse.trace(
         name="serper_search",
         input={"topic": topic, "max_results_per_type": max_results_per_type}
     )
@@ -181,6 +180,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
