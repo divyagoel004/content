@@ -679,7 +679,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
     # Create knowledge base
     main_trace = langfuse.trace(name="final_pipeline", input={...})
     serper_search(topic, 20)
-    main_trace.end()
+    langfuse.flush()
     
     # Content type selection
     prompt = f"Select the appropriate content-types from {list(content_types_dict.keys())} for the topic \"{topic}\""
@@ -2578,6 +2578,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
