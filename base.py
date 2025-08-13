@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from langchain_community.utilities import GoogleSerperAPIWrapper
 
 # Constants
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+SERPER_API_KEY = os.getenv("SERPER_API_KEY","4dd51fc28ee7339f4993df71c7e3247cc8faaf6b")
 VECTOR_DB_PATH = "vector_store.faiss"
 INDEX_METADATA_PATH = "doc_metadata.pkl"
 CONTENT_TYPES = ["blogs", "articles", "case studies", "strategies", "ebooks"]
@@ -21,91 +21,90 @@ HEADERS = {
 from langfuse import Langfuse
 
 langfuse = Langfuse(
-    public_key=os.getenv("LANGFUSE_PUBLIC_API_KEY"),
-    secret_key=os.getenv("LANGFUSE_SECRET_API_KEY"),
+    public_key="pk-lf-ff2508c5-f759-49c2-b1ef-b8c42c3cdd4a",
+    secret_key="sk-lf-29906660-5e8e-4ba1-ab9b-147fa5b270ff",
     host="https://cloud.langfuse.com",
-) 
+)
 
 # Embedding model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def serper_search(topic, max_results_per_type=5, parent_span=None):
-    trace = parent_span.span(
-        name="serper_search",
-        input={"topic": topic, "max_results_per_type": max_results_per_type}
-    ) if parent_span else langfuse.trace(
+def serper_search(topic, max_results_per_type=5):
+    trace = langfuse.trace(
         name="serper_search",
         input={"topic": topic, "max_results_per_type": max_results_per_type}
     )
-    # trace = langfuse.trace(
-    #     name="serper_search",
-    #     input={"topic": topic, "max_results_per_type": max_results_per_type}
-    # )
+    os.environ["SERPER_API_KEY"] = SERPER_API_KEY
+    search = GoogleSerperAPIWrapper()
+    
+    all_results = []
 
-    try:
-        os.environ["SERPER_API_KEY"] = SERPER_API_KEY
-        search = GoogleSerperAPIWrapper()
-        all_results = []
+    for ctype in CONTENT_TYPES:
+        query = f"{topic} {ctype}"
+        print(f"[LangChain Serper] Searching: {query}")
 
-        for ctype in CONTENT_TYPES:
-            query = f"{topic} {ctype}"
-            print(f"[LangChain Serper] Searching: {query}")
-
-            search_span = trace.span(
-                name="search_content_type",
-                input={"query": query, "type": ctype}
-            )
-
-            try:
-                search_result = search.results(query)
-                organic = search_result.get("organic", [])
-                for r in organic[:max_results_per_type]:
-                    title = r.get("title", "")
-                    snippet = r.get("snippet", "")
-                    link = r.get("link", "")
-                    search_span.span(
-                        name="search_result",
-                        input={"title": title, "link": link, "snippet": snippet}
-                    ).end()
-                    all_results.append((title, snippet, link, ctype))
-            except Exception as e:
-                search_span.update(output={"error": str(e)})
-                print(f"[ERROR] Failed search for '{query}': {e}")
-
-            search_span.update(output={"status": "done"})
-            trace.update(output={"status": "stored"})
-
-        text_blocks = []
-        metadata_blocks = []
-        for title, snippet, url, ctype in all_results:
-            print(f"[Processing] {ctype.upper()} → {url}")
-            text = extract_text_from_url(url)
-            if not text or len(text) < 300:
-                text = f"{title}\n{snippet}"
-            if len(text) >= 300:
-                from textwrap import wrap
-                chunks = wrap(text, 800)
-                for chunk in chunks:
-                    text_blocks.append(chunk)
-                    metadata_blocks.append({
-                        "type": ctype,
-                        "source": url,
-                        "summary": chunk[:300]
-                    })
-
-        if text_blocks:
-            print("[Vector Store] Storing extracted documents...")
-            store_in_vector_db(text_blocks, metadata_blocks)
-            trace.update(output={"status": "stored", "num_blocks": len(text_blocks)})
-        else:
-            print("[Warning] No valid content found.")
-            trace.update(output={"status": "no_valid_content"})
-
-    finally:
-        span.finish()
-        trace.finish()  # <-- CRUCIAL
+        search_span = trace.span(
+            name="search_content_type",
+            input={"query": query, "type": ctype}
+        )
+        try:
+            search_result = search.results(query)
+            organic = search_result.get("organic", [])
+            urls = []
+            for r in organic[:max_results_per_type]:
+                title = r.get("title", "")
+                snippet = r.get("snippet", "")
+                link = r.get("link", "")
+                link_span = search_span.span(
+                    name="search_result",
+                    input={"title": title, "link": link, "snippet": snippet}
+                )
+                link_span.end()
+                urls.append(link)
+                all_results.append((title, snippet, link, ctype))
+            
+        except Exception as e:
+            search_span.output = {"error": str(e)}
+            print(f"[ERROR] Failed search for '{query}': {e}")
+        search_span.end()
 
     
+
+    text_blocks = []
+    metadata_blocks = []
+
+    for title, snippet, url, ctype in all_results:
+        print(f"[Processing] {ctype.upper()} → {url}")
+
+        # scrape_span = trace.span(name="scrape_url", input=url)
+        text = extract_text_from_url(url)
+        # scrape_span.update(output={"text_length": len(text) if text else 0})
+        # scrape_span.end()
+
+        if not text or len(text) < 300:
+            text = f"{title}\n{snippet}"
+
+        if len(text) >= 300:
+            from textwrap import wrap
+            chunks = wrap(text, 800)
+            for chunk in chunks:
+                text_blocks.append(chunk)
+                metadata_blocks.append({
+                    "type": ctype,
+                    "source": url,
+                    "summary": chunk[:300]
+                })
+
+    if text_blocks:
+        print("[Vector Store] Storing extracted documents...")
+        # store_span = trace.span(name="store_vector_db", input={"num_blocks": len(text_blocks)})
+        store_in_vector_db(text_blocks, metadata_blocks)
+        # store_span.update(output={"status": "stored"})
+        # store_span.end()
+    else:
+        print("[Warning] No valid content found.")
+        # trace.update(output={"warning": "no_valid_content"})
+
     
 
 def extract_text_from_url(url, timeout=10):
@@ -181,12 +180,6 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
-
-
-
-
-
-
 
 
 
