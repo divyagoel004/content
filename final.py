@@ -1829,44 +1829,40 @@ def render_editing_panel():
                         
                         # Handle different content types
                         if section['type'] == 'diagram' or 'diagram' in component_name or 'chart' in component_name or 'flow' in component_name or 'illustration' in component_name or 'graph' in component_name:
-                            # Regenerate diagram/chart content
                             try:
                                 context_block = get_top_image_contexts(
-                                    st.session_state.get('current_topic', 'general topic'), 
-                                    st.session_state.get('current_content_type', 'general'), 
-                                    component_name, 
+                                    st.session_state.get('current_topic', 'general topic'),
+                                    st.session_state.get('current_content_type', 'general'),
+                                    component_name,
                                     top_k=10
                                 )
-                                
+
                                 response = client.models.generate_content(
                                     model="gemini-2.5-flash",
                                     contents=f"""
                                     Generate an improved Mermaid diagram based on user requirements.
-                                    
+
                                     {research_context}
-                                    
+
                                     Reference Context:
                                     {context_block}
-                                    
+
                                     Create an improved diagram that:
                                     - Addresses the edit type: {edit_type}
                                     - Incorporates user feedback: {user_feedback}
                                     - Uses research findings for accuracy
                                     - Uses less than 15 nodes with clear, vertical structure
                                     - Maintains professional quality
-                                    
+
                                     Output Format:
                                     Return ONLY a valid JSON object: {{"code": "<MERMAID_CODE>"}}
-                                    
+
                                     Do NOT use markdown blocks or explanations.
                                     """,
                                     config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8)
                                 )
-                                
-                                # Parse JSON response
-                                response_text = response.text.strip()
 
-# Remove markdown fences if present
+                                response_text = response.text.strip()
                                 if response_text.startswith("```") and response_text.endswith("```"):
                                     response_text = "\n".join(line for line in response_text.splitlines() if not line.strip().startswith("```")).strip()
 
@@ -1874,34 +1870,28 @@ def render_editing_panel():
                                     mermaid_json = json.loads(response_text)
                                     if not isinstance(mermaid_json, dict) or "code" not in mermaid_json:
                                         raise ValueError("Invalid JSON structure or missing 'code' field")
-                                    
                                     mermaid_code = mermaid_json["code"]
-
-                                except json.JSONDecodeError as json_err:
-                                    print(f"DEBUG: JSON parsing failed: {json_err}")
-                                    print(f"DEBUG: Raw model output: {response_text!r}")
-
-                                    # Try extracting code using regex if JSON is malformed
-                                    
+                                except json.JSONDecodeError:
                                     code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
                                     if code_match:
                                         mermaid_code = code_match.group(1)
                                     else:
                                         raise ValueError("Could not extract 'code' from model output")
-                                
-                                # Generate new diagram image
+
                                 svg = generate_mermaid_diagram({"code": mermaid_code})
                                 if svg:
+                                    from io import BytesIO
                                     import time
+                                    from base64 import b64decode
+
                                     timestamp = int(time.time())
                                     img_filename = f"diagram_regenerated_{timestamp}_{component_name.replace(' ', '_')}.png"
                                     img_path = os.path.abspath(img_filename)
-                                    
-                                    # Convert SVG to PNG
+
                                     image_data = BytesIO(b64decode(svg))
                                     img = Image.open(image_data)
-                                    
-                                    # Resize if needed
+
+                                    # Resize
                                     max_width, min_width, max_height = 700, 300, 900
                                     img_w, img_h = img.size
                                     aspect = img_h / img_w
@@ -1910,128 +1900,95 @@ def render_editing_panel():
                                     if scaled_h > max_height:
                                         scaled_h = max_height
                                         scaled_w = scaled_h / aspect
-                                        
+
                                     img = img.resize((int(scaled_w), int(scaled_h)), Image.Resampling.LANCZOS)
                                     img.save(img_path, 'PNG', optimize=True)
-                                    
-                                    
-                                    # Update section with new image path
-                                    img_path = f"graph_{int(time.time())}.png"
-                                    img.save(img_path, "PNG", optimize=True)
-                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
-                                    st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
+
+                                    # Update and show
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
                                     st.session_state.slides[slide_index].content_sections[section_index]['mermaid_code'] = mermaid_code
-                                    
+                                    st.image(img_path)
                                 else:
-                                    
-                                    new_content = content_enrichment_agent.generate_reply([
-                                    {
-                                        "role": "user",
-                                        "content": f"""
-                                        Create a detailed text description of what the {component_name} should contain.
-                                        
-                                        {research_context}
-                                        
-                                        Generate content that:
-                                        - Describes the visual concept in clear bullet points
-                                        - Addresses the edit type: {edit_type}
-                                        - Incorporates user feedback: {user_feedback}
-                                        - Uses research findings for accuracy
-                                        """
-                                    }
-                                ])
-                                    st.session_state.slides[slide_index].content_sections[section_index]['content'] = new_content.strip()
-                                    st.session_state.slides[slide_index].content_sections[section_index]['type'] = 'text'
-                            
-                                    
+                                    raise Exception("Diagram generation returned empty SVG")
+
                             except Exception as diagram_error:
-                                # st.warning(f"Diagram regeneration failed: {diagram_error}. Generating text alternative.")
-                                # Fallback to text description
-                                new_content = content_enrichment_agent.generate_reply([
-                                    {
-                                        "role": "user",
-                                        "content": f"""
-                                        Create a detailed text description of what the {component_name} should contain.
-                                        
-                                        {research_context}
-                                        
-                                        Generate content that:
-                                        - Describes the visual concept in clear bullet points
-                                        - Addresses the edit type: {edit_type}
-                                        - Incorporates user feedback: {user_feedback}
-                                        - Uses research findings for accuracy
-                                        """
-                                    }
-                                ])
+                                st.warning(f"Diagram regeneration failed: {diagram_error}. Using text fallback.")
+                                new_content = content_enrichment_agent.generate_reply([{
+                                    "role": "user",
+                                    "content": f"""
+                                    Create a detailed text description of what the {component_name} should contain.
+
+                                    {research_context}
+
+                                    Generate content that:
+                                    - Describes the visual concept in clear bullet points
+                                    - Addresses the edit type: {edit_type}
+                                    - Incorporates user feedback: {user_feedback}
+                                    - Uses research findings for accuracy
+                                    """
+                                }])
                                 st.session_state.slides[slide_index].content_sections[section_index]['content'] = new_content.strip()
                                 st.session_state.slides[slide_index].content_sections[section_index]['type'] = 'text'
+
+
                         
                         elif section['type'] == 'image' and 'mathematical' in component_name:
                             # Regenerate mathematical equation
                             try:
-                                # Generate new equation
-                                equation_response = content_generator.generate_reply([
-                                    {
-                                        "role": "user",
-                                        "content": f"""
-                                        Generate an improved mathematical equation based on user requirements.
-                                        
-                                        {research_context}
-                                        
-                                        Requirements:
-                                        - Create ONE clear LaTeX equation relevant to the topic
-                                        - Address the edit type: {edit_type}
-                                        - Incorporate user feedback: {user_feedback}
-                                        - Use proper LaTeX syntax without \\text commands
-                                        - Do not wrap in $$ symbols
-                                        
-                                        Format:
-                                        EQUATION: [LaTeX equation]
-                                        DESCRIPTION: [brief description]
-                                        """
-                                    }
-                                ])
-                                
+        # Generate new equation
+                                equation_response = content_generator.generate_reply([{
+                                    "role": "user",
+                                    "content": f"""
+                                    Generate an improved mathematical equation based on user requirements.
+
+                                    {research_context}
+
+                                    Requirements:
+                                    - Create ONE clear LaTeX equation relevant to the topic
+                                    - Address the edit type: {edit_type}
+                                    - Incorporate user feedback: {user_feedback}
+                                    - Use proper LaTeX syntax without \\text commands
+                                    - Do not wrap in $$ symbols
+
+                                    Format:
+                                    EQUATION: [LaTeX equation]
+                                    DESCRIPTION: [brief description]
+                                    """
+                                }])
+
                                 # Parse equation and description
                                 latex_equation = ""
                                 description = ""
-                                
-                                lines = equation_response.strip().split('\n')
-                                for line in lines:
+                                for line in equation_response.strip().split('\n'):
                                     if line.startswith("EQUATION:"):
                                         latex_equation = line.replace("EQUATION:", "").strip()
                                     elif line.startswith("DESCRIPTION:"):
                                         description = line.replace("DESCRIPTION:", "").strip()
-                                
+
                                 if not latex_equation:
                                     latex_equation = "F(x) = \\sum_{i=1}^n a_i x^i"  # Fallback
-                                
-                                # Generate new image
+
+                                # Save rendered LaTeX equation as PNG
                                 import time
                                 timestamp = int(time.time())
-                                img_path = f"graph_{int(time.time())}.png"
-                                
-                                
-                                
+                                img_filename = f"equation_regenerated_{timestamp}.png"
+                                img_path = os.path.abspath(img_filename)
+
                                 rendered_path = render_latex_to_image(latex_equation, img_path)
-                                img.save(rendered_path, 'PNG', optimize=True)
-                                
-                                
-                                    # Update section with new image path
-                                    
+
                                 if rendered_path and os.path.exists(rendered_path):
-                                    
-                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
-                                    st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
-                                    
+                                    # Show and update
+                                    st.session_state.slides[slide_index].content_sections[section_index]['image'] = rendered_path
+                                    st.image(rendered_path)
+
                                     # Update description if it exists in the next section
                                     if section_index + 1 < len(st.session_state.slides[slide_index].content_sections):
                                         next_section = st.session_state.slides[slide_index].content_sections[section_index + 1]
-                                        if 'description' in next_section.get('component_name', ''):
+                                        if 'description' in next_section.get('component_name', '').lower():
                                             next_section['content'] = description
                                 else:
                                     raise Exception("Equation image generation failed")
-                                    
+
                             except Exception as math_error:
                                 st.warning(f"Mathematical equation regeneration failed: {math_error}. Using text fallback.")
                                 fallback_content = f"**Mathematical Concepts** (Regenerated)\n\n{user_feedback}\n\nMathematical representation and analysis related to the topic."
@@ -2042,68 +1999,65 @@ def render_editing_panel():
                             # Regenerate real-world photo
                             try:
                                 context_block = get_top_image_contexts(
-                                    st.session_state.get('current_topic', 'general topic'), 
-                                    st.session_state.get('current_content_type', 'general'), 
-                                    component_name, 
+                                    st.session_state.get('current_topic', 'general topic'),
+                                    st.session_state.get('current_content_type', 'general'),
+                                    component_name,
                                     top_k=10
                                 )
-                                
+
                                 photo_prompt = f"""
                                 Generate an improved realistic photograph based on user requirements.
-                                
+
                                 Topic: {st.session_state.get('current_topic', 'general topic')}
                                 Edit Type: {edit_type}
                                 User Feedback: {user_feedback}
-                                
+
                                 Create a high-resolution photograph that:
                                 - Shows real-world application of the topic
                                 - Addresses the specific improvements requested
                                 - Maintains professional quality
                                 - Avoids logos, branding, or text overlays
-                                
+
                                 Reference context for inspiration:
                                 {context_block}
                                 """
-                                
+
                                 response = client.models.generate_content(
                                     model="gemini-2.0-flash-preview-image-generation",
                                     contents=photo_prompt,
                                     config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
                                 )
-                                
+
                                 photo_generated = False
                                 for idx, part in enumerate(response.candidates[0].content.parts):
                                     if part.inline_data:
+                                        from io import BytesIO
                                         import time
+
                                         timestamp = int(time.time())
                                         img_filename = f"photo_regenerated_{timestamp}_{idx}.png"
                                         img_path = os.path.abspath(img_filename)
-                                        
+
                                         photo_data = BytesIO(part.inline_data.data)
                                         photo_img = Image.open(photo_data)
-                                        
+
                                         if photo_img.mode != 'RGB':
                                             photo_img = photo_img.convert('RGB')
-                                        
+
                                         photo_img.save(img_path, 'PNG', optimize=True)
-                                        
+
+                                        # Show and update immediately
                                         if os.path.exists(img_path):
-                                            
-                                            
-
-                                            img_path = f"graph_{int(time.time())}.png"
-                                            img.save(img_path, "PNG", optimize=True)
-                                            st.session_state.slides[slide_index].content_sections[section_index]['image'] = os.path.abspath(img_path)
-                                            st.image(st.session_state.slides[slide_index].content_sections[section_index]['image'])
-
+                                            st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
+                                            st.image(img_path)
                                             photo_generated = True
                                             break
-                                
+
                                 if not photo_generated:
                                     raise Exception("Photo generation failed")
-                                    
+
                             except Exception as photo_error:
-                                st.warning(f"Photo regeneration failed: {photo_error}. Using text description.")
+                                st.warning(f"Photo regeneration failed: {photo_error}. Using text fallback.")
                                 fallback_content = f"**Real-World Application** (Regenerated)\n\n{user_feedback}\n\nDescription of practical applications and real-world usage scenarios."
                                 st.session_state.slides[slide_index].content_sections[section_index]['content'] = fallback_content
                                 st.session_state.slides[slide_index].content_sections[section_index]['type'] = 'text'
