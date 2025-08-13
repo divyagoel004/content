@@ -678,7 +678,7 @@ def generate_presentation_slides(topic, depth_level="intermediate"):
     
     # Create knowledge base
     main_trace = langfuse.trace(name="final_pipeline", input={"pipeline": "search"})
-    serper_search("agentic ai", 20, parent_span=main_trace)
+    serper_search(topic, 20, parent_span=main_trace)
     main_trace.update(output={"status": "complete"})
     langfuse.flush()
     
@@ -2579,6 +2579,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
