@@ -1905,6 +1905,7 @@ def render_editing_panel():
                                     img.save(img_path, 'PNG', optimize=True)
 
                                     # Update and show
+                                    
                                     st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
                                     st.session_state.slides[slide_index].content_sections[section_index]['mermaid_code'] = mermaid_code
                                     st.image(img)
@@ -1979,6 +1980,7 @@ def render_editing_panel():
                                 if rendered_path and os.path.exists(rendered_path):
                                     # Show and update
                                     st.session_state.slides[slide_index].content_sections[section_index]['image'] = rendered_path
+                                    st.session_state.slides[slide_index].content_sections[section_index]['content'] = rendered_path
                                     st.image(rendered_path)
 
                                     # Update description if it exists in the next section
@@ -2049,6 +2051,7 @@ def render_editing_panel():
                                         # Show and update immediately
                                         if os.path.exists(img_path):
                                             st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
+                                            st.session_state.slides[slide_index].content_sections[section_index]['content'] = img_path
                                             st.image(img)
                                             photo_generated = True
                                             break
@@ -2579,4 +2582,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
