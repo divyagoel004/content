@@ -1907,7 +1907,7 @@ def render_editing_panel():
                                     # Update and show
                                     st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
                                     st.session_state.slides[slide_index].content_sections[section_index]['mermaid_code'] = mermaid_code
-                                    st.image(img_path)
+                                    st.image(img)
                                 else:
                                     raise Exception("Diagram generation returned empty SVG")
 
@@ -2049,7 +2049,7 @@ def render_editing_panel():
                                         # Show and update immediately
                                         if os.path.exists(img_path):
                                             st.session_state.slides[slide_index].content_sections[section_index]['image'] = img_path
-                                            st.image(img_path)
+                                            st.image(img)
                                             photo_generated = True
                                             break
 
@@ -2579,3 +2579,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
