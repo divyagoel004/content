@@ -94,7 +94,7 @@ def serper_search(topic, max_results_per_type=5):
             trace.update(output={"status": "no_valid_content"})
 
     finally:
-        trace.end()  # <-- CRUCIAL
+        langfuse.flush()  # <-- CRUCIAL
 
     
     
@@ -172,6 +172,7 @@ def query_vector_db(user_query, top_k=10, chunk_limit=500):
 
     # Return only top_k unique documents
     return results[:top_k]
+
 
 
 
