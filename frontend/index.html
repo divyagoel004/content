@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Presentation Studio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="main-container">
+        <header>
+            <h1>AI Presentation Creator</h1>
+            <p>Create stunning presentations with AI-powered research</p>
+        </header>
+
+        <div class="controls">
+            <input type="text" id="topic-input" placeholder="e.g., Machine Learning, Generative AI">
+            <button id="generate-btn" class="control-button">🚀 Generate Presentation</button>
+        </div>
+
+        <div id="loading-spinner" class="loading-spinner" style="display: none;"></div>
+
+        <div id="presentation-container">
+            <div id="slide-display" class="slide-container" style="display: none;">
+                <!-- Slides will be rendered here by JavaScript -->
+            </div>
+
+            <div id="navigation-controls" class="slide-navigation" style="display: none;">
+                <button id="prev-btn" class="control-button">◀️ Previous</button>
+                <span id="slide-counter"></span>
+                <button id="next-btn" class="control-button">▶️ Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
