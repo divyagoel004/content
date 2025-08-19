@@ -428,41 +428,505 @@ def generate_presentation_slides(topic: str, depth_level: str = "intermediate") 
                         })
 
             elif "diagram" in component.lower()  or "flow" in component.lower() or "table" in component.lower() or "illustration" in component.lower():
-                context_block = get_top_image_contexts(topic, content_type, component)
-                mer = f"""You are an expert in generating Mermaid diagrams in JSON format. Topic: "{topic}", Diagram Type: "{component}". Reference context: {context_block}. Generate a JSON output with a "code" key for the mermaid diagram."""
-
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=mer,
-                    config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8, top_p=0.9)
-                )
-                response_text = response.text.strip()
-                mermaid_code = ""
+                # Generate mermaid diagram
+                heading = f"**{component}**"
+                import json
+                context_block = get_top_image_contexts(topic, content_type, component, top_k=10)
+                
                 try:
-                    mermaid_json = json.loads(response_text)
-                    mermaid_code = mermaid_json['code']
-                except (json.JSONDecodeError, KeyError):
-                     match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
-                     if match:
-                         mermaid_code = match.group(1)
-                     else:
-                         mermaid_code = response_text
+                    temp=langfuse.get_prompt(
+                    name="diagram_generation_prompt",label="production"
+                    )
+                    mer = temp.compile(
+                        topic = str(topic),
+                        component = str(component),
+                        context_block = str(context_block),
+                        research_context = str(research_context)
+                    )
+                    
+                    # mer = f"""
+                    #     You are an expert in generating Mermaid diagrams in JSON format.
 
-                svg = generate_mermaid_diagram({"code": mermaid_code})
-                if svg:
-                    img_filename = f"diagram_{uuid.uuid4()}.png"
-                    img_path = os.path.join("static", img_filename)
-                    os.makedirs(os.path.dirname(img_path), exist_ok=True)
+                    #     Topic: "{topic}"
+                    #     Diagram Type: "{component}" or relevant type
+                    #     Reference diagram Context:\n{context_block}
+                    #     Reference text Context:\n {research_context}
+
+                    #     Now, generate a JSON output that corresponds to a mermaid diagram representing the above topic, following the referenced structure and insights.
+
+                    #     Task:
+                    #     – Generate a meaningful Mermaid diagram that accurately represents the topic based on the provided reference context  
+                    #     – Use less than 15  nodes, layout direction, and branches necessary
+                    #     – Focus on clarity, compactness, and contextual relevance
+                    #     – Ensure node labels are contextual and non-repetitive
+
+                    #     Output Format:
+                    #     Return ONLY a valid JSON object in the following format:  
+                    #     {{ "code": "<MERMAID_CODE>" }}
+
+                    #     Do NOT:
+                    #     - Repeat earlier structures
+                    #     - Use markdown or ``` syntax
+                    #     - Provide explanation
+                    #     - Overcomplicate with too many branches.
+                        
+                    #     Return only valid Mermaid code without markdown blocks.
+                    #     """
+                    
+                    # # Log the prompt
+                    # langfuse.create_prompt(
+                    #     name="diagram_generation_prompt",
+                    #     prompt=mer,
+                    #     type="text"
+                    # )
+                    
+                    diagram_generation_span = langfuse.span(
+                        trace_id=trace.id,
+                        name="diagram_generation",
+                        input={
+                            "prompt": mer,
+                            "context_block_length": len(str(context_block)) if context_block else 0
+                        }
+                    )
+                    
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=mer,
+                        config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8, top_p=0.9)
+                    )
+                    response_text = response.text.strip()
+
+# Remove markdown fences if present
+                    if response_text.startswith("```") and response_text.endswith("```"):
+                        response_text = "\n".join(line for line in response_text.splitlines() if not line.strip().startswith("```")).strip()
+
                     try:
-                        image_data = BytesIO(b64decode(svg))
-                        img = Image.open(image_data)
-                        img.save(img_path, 'PNG')
-                        content_sections_data.append({
-                            "type": "image", "content": img_filename, "editable": True, "component_name": component, "mermaid_code": mermaid_code
+                        mermaid_json = json.loads(response_text)
+                        if not isinstance(mermaid_json, dict) or "code" not in mermaid_json:
+                            raise ValueError("Invalid JSON structure or missing 'code' field")
+                        
+                        mermaid_code = mermaid_json["code"]
+
+                    except json.JSONDecodeError as json_err:
+                        print(f"DEBUG: JSON parsing failed: {json_err}")
+                        print(f"DEBUG: Raw model output: {response_text!r}")
+
+                        # Try extracting code using regex if JSON is malformed
+                        
+                        code_match = re.search(r'"code"\s*:\s*"([^"]+)"', response_text)
+                        if code_match:
+                            mermaid_code = code_match.group(1)
+                        else:
+                            raise ValueError("Could not extract 'code' from model output")
+
+                    # mermaid_json = json.loads(response.text)
+                    # mermaid_code = mermaid_json['code']
+                    
+                    # Generate diagram image
+                    svg = generate_mermaid_diagram({"code": mermaid_code})
+                    
+                    if svg:
+                        content_sections.append({
+                            "type": "text",
+                            "content": heading,
+                            "editable": False,
+                            "component_name": "heading"
                         })
-                    except Exception as e:
-                        print(f"Failed to save diagram: {e}")
-            # ... (other component types can be added here)
+                        
+                        import time
+                        timestamp = int(time.time())
+                        img_filename = f"diagram_{timestamp}_{component.replace(' ', '_')}.png"
+                        img_path = os.path.abspath(img_filename)
+                        
+                        print(f"DEBUG: Saving diagram to: {img_path}")
+                        
+                        try:
+                            image_data = BytesIO(b64decode(svg))
+                            img = Image.open(image_data)
+                            
+                            # Apply sizing logic
+                            max_width, min_width, max_height = 700, 300, 900
+                            img_w, img_h = img.size
+                            aspect = img_h / img_w
+                            scaled_w = max(min(img_w, max_width), min_width)
+                            scaled_h = scaled_w * aspect
+                            if scaled_h > max_height:
+                                scaled_h = max_height
+                                scaled_w = scaled_h / aspect
+                                
+                            img = img.resize((int(scaled_w), int(scaled_h)), Image.Resampling.LANCZOS)
+                            
+                            # Save with error handling
+                            img.save(img_path, 'PNG', optimize=True)
+                            
+                            # Verify file was created
+                            if os.path.exists(img_path):
+                                print(f"DEBUG: Successfully saved diagram: {img_path} (size: {os.path.getsize(img_path)} bytes)")
+                                
+                                diagram_generation_span.update(
+                                    output={
+                                        "mermaid_code": mermaid_code,
+                                        "image_path": img_path,
+                                        "image_size": os.path.getsize(img_path),
+                                        "generation_success": True
+                                    }
+                                )
+                                
+                                content_sections.append({
+                                    "type": "image",
+                                    "content": img_path,
+                                    "editable": True,
+                                    "component_name": component,
+                                    "mermaid_code": mermaid_code
+                                })
+                            else:
+                                raise Exception("File was not created successfully")
+                                
+                        except Exception as save_error:
+                            print(f"DEBUG: Error saving diagram: {save_error}")
+                            raise save_error
+                            
+                    else:
+                        raise Exception("SVG generation returned None")
+                    
+                    diagram_generation_span.end()
+                        
+                except Exception as e:
+                    print(f"DEBUG: Diagram generation failed: {e}")
+                    
+                    if 'diagram_generation_span' in locals():
+                        diagram_generation_span.update(
+                            output={"error": str(e), "generation_success": False}
+                        )
+                        diagram_generation_span.end()
+                    
+                    # Fallback to text
+                    temp=langfuse.get_prompt(
+                    name="diagram_fallback_prompt",label="production"
+                    )
+                    fallback_prompt = temp.compile(
+                        component = str(component),
+                        topic = str(topic),
+                        knowledge_base = str(knowledge_base)
+                    )
+                    
+                    # fallback_prompt = f"""
+                    #  Summarize what the **{component}** for "{topic}" should ideally contain.
+
+                    # Use this context:
+                    # {knowledge_base}
+
+                    # Instructions:
+                    # - Start with a short **heading** that reflects the {component} type and topic
+                    # - Then provide 3–5 bullet points
+                    # - Each bullet should describe one clear, useful idea
+                    # - Use plain English (no jargon, no markdown, no fluff)
+                    # - No explanation or preamble
+                    # """
+                    
+                    # Log fallback prompt
+                    # langfuse.create_prompt(
+                    #     name="diagram_fallback_prompt",
+                    #     prompt=fallback_prompt,
+                    #     type="text"
+                    # )
+                    
+                    fallback_span = langfuse.span(
+                        trace_id=trace.id,
+                        name="diagram_fallback_generation",
+                        input={"fallback_reason": str(e), "prompt": fallback_prompt}
+                    )
+                    
+                    fallback_content = content_enrichment_agent.generate_reply([
+                        {
+                            "role": "user", 
+                            "content": fallback_prompt
+                        }
+                    ])
+                    
+                    fallback_span.update(output={"fallback_content": fallback_content})
+                    fallback_span.end()
+                    
+                    content_sections.append({
+                        "type": "text",
+                        "content": fallback_content,
+                        "editable": True,
+                        "component_name": component
+                    })
+
+            # For real-world photo generation  
+            elif component.lower() == "real-world photo":
+                try:
+                    unique_seed = np.random.randint(1000, 9999)
+                    timestamp = int(time.time())
+                    temp=langfuse.get_prompt(
+                    name="real_world_photo_generation",label="production"
+                    )
+                    photo_prompt = temp.compile(
+                        topic= str(topic),
+                        context_block = str(context_block)
+                    )
+                    
+                    # photo_prompt = (
+                    #     f"Generate a realistic, high-resolution photograph that visually represents the real-world application of '{topic}'.\n"
+                    #     f"The image should resemble an authentic, unstaged snapshot of a practical scenario where '{topic}' is being used or demonstrated in action.\n"
+                    #     f"Avoid logos, branding, or any text overlays.\n"
+                    #     f"Refer to the following similar real-world scenes for inspiration:\n\n{context_block}\n\n"
+                    #     f"Ensure the final output maintains a natural look and clearly communicates the essence of '{topic}' without needing any explicit labels."
+                    # )
+                    
+                    # # Log the prompt
+                    # langfuse.create_prompt(
+                    #     name="real_world_photo_generation_prompt",
+                    #     prompt=photo_prompt,
+                    #     type="text"
+                    # )
+                    
+                    photo_generation_span = langfuse.span(
+                        trace_id=trace.id,
+                        name="real_world_photo_generation",
+                        input={
+                            "prompt": photo_prompt,
+                            "unique_seed": unique_seed,
+                            "timestamp": timestamp
+                        }
+                    )
+                    
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash-preview-image-generation",
+                        contents=photo_prompt,
+                        config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
+                    )
+
+                    photo_generated = False
+                    for idx, part in enumerate(response.candidates[0].content.parts):
+                        if part.inline_data:
+                            # Create unique filename with absolute path
+                            img_filename = f"photo_{timestamp}_{unique_seed}_{idx}.png"
+                            img_path = os.path.abspath(img_filename)
+                            
+                            print(f"DEBUG: Saving photo to: {img_path}")
+                            
+                            try:
+                                photo_data = BytesIO(part.inline_data.data)
+                                photo_img = Image.open(photo_data)
+                                
+                                # Convert to RGB if needed
+                                if photo_img.mode != 'RGB':
+                                    photo_img = photo_img.convert('RGB')
+                                
+                                # Save with error handling
+                                photo_img.save(img_path, 'PNG', optimize=True)
+                                
+                                # Verify file was created
+                                if os.path.exists(img_path):
+                                    print(f"DEBUG: Successfully saved photo: {img_path} (size: {os.path.getsize(img_path)} bytes)")
+                                    
+                                    photo_generation_span.update(
+                                        output={
+                                            "image_path": img_path,
+                                            "image_size": os.path.getsize(img_path),
+                                            "generation_success": True,
+                                            "image_index": idx
+                                        }
+                                    )
+                                    
+                                    content_sections.append({
+                                        "type": "image",
+                                        "content": img_path,
+                                        "editable": True,
+                                        "component_name": component
+                                    })
+                                    photo_generated = True
+                                    break
+                                else:
+                                    raise Exception("Photo file was not created successfully")
+                                    
+                            except Exception as save_error:
+                                print(f"DEBUG: Error saving photo: {save_error}")
+                                continue
+                    
+                    if not photo_generated:
+                        raise Exception("No photo was generated from the response")
+                    
+                    photo_generation_span.end()
+                
+                        
+                except Exception as e:
+                    print(f"DEBUG: Photo generation failed: {e}")
+                    
+                    if 'photo_generation_span' in locals():
+                        photo_generation_span.update(
+                            output={"error": str(e), "generation_success": False}
+                        )
+                        photo_generation_span.end()
+                
+            elif component.lower() == "graph" :
+                
+              
+                try:
+                    topic = topic
+                    content_type = content_type.strip()
+                    knowledge_base = knowledge_base if knowledge_base else ""
+                    temp=langfuse.get_prompt(
+                    name="graph_generation_prompt",label="production"
+                    )
+                    graph_prompt = temp.compile(
+                        content_type= str(content_type),
+                        topic =  str(topic)
+                    )
+                    
+                    # ===== STEP 1: Get graph topic & type =====
+                    # graph_prompt = graph_prompt = f"""
+                    #     You are a data visualization expert. 
+
+                    #     Generate one **specific graph idea** for the slide on {content_type} 
+                    #     related to the topic '{topic}'.
+
+                    #     Rules:
+                    #     - Graph must directly match the content_type 
+                    #     (e.g., if 'applications' → adoption per industry, 
+                    #             if 'trends' → market forecast, 
+                    #             if 'challenges' → barrier analysis, 
+                    #             if 'architecture' → component performance).
+                    #     - Suggest graph_type (bar, line, area, scatter, pie).
+                    #     - Each graph idea should be unique — do not repeat earlier graph topics.
+                    #     - Keep output JSON only:
+                    #     {{
+                    #     "graph_topic": "...",
+                    #     "graph_type": "..."
+                    #     }}
+
+
+                    # Respond in JSON with:
+                    # {{
+                    #     "graph_topic": "...",
+                    #     "graph_type": "..."
+                    # }}
+                    # No extra data or text or space
+                    # """
+                    graph_generation_span = langfuse.span(
+                        trace_id=trace.id,
+                        name="graph_generation_prompt",
+                        input=graph_prompt
+                    )
+
+                    graph_type_response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=graph_prompt,
+                        config=types.GenerateContentConfig(response_modalities=["TEXT"], temperature=0.8, top_p=0.9)
+                    )
+                    graph_generation_span.update(output={"text_content": graph_type_response})
+                    graph_generation_span.end()
+                    import json
+                    raw_text = graph_type_response.text.strip()
+
+# Remove markdown fences if model added them
+                    if raw_text.startswith("```") and raw_text.endswith("```"):
+                        raw_text = "\n".join(
+                            line for line in raw_text.splitlines()
+                            if not line.strip().startswith("```")
+                        ).strip()
+
+                    try:
+                        graph_info = json.loads(raw_text)
+                        if not isinstance(graph_info, dict):
+                            raise ValueError("Invalid JSON structure: not a dictionary")
+                        if "graph_topic" not in graph_info or "graph_type" not in graph_info:
+                            raise ValueError("Missing required keys in JSON")
+
+                        graph_topic = graph_info["graph_topic"]
+                        graph_type = graph_info["graph_type"]
+
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: Failed to parse JSON: {e}")
+                        print(f"DEBUG: Raw model output: {raw_text!r}")
+
+                        # Try regex-based extraction
+                        
+                        topic_match = re.search(r'"graph_topic"\s*:\s*"([^"]+)"', raw_text)
+                        type_match = re.search(r'"graph_type"\s*:\s*"([^"]+)"', raw_text)
+
+                        if topic_match and type_match:
+                            graph_topic = topic_match.group(1)
+                            graph_type = type_match.group(1)
+                        else:
+                            raise ValueError("Could not extract graph_topic and graph_type from model output")
+
+
+                    # ===== STEP 2: Serper API Google Image Search =====
+                    import requests, os, time , json
+
+                    SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+                    if not SERPER_API_KEY:
+                        raise ValueError("SERPER_API_KEY not set in environment variables.")
+
+                    query = f"{graph_topic} {graph_type} chart"
+
+                    url = "https://google.serper.dev/images"
+                    headers = {
+                        "X-API-KEY": SERPER_API_KEY,
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "q": query,
+                        "num": 5
+                    }
+
+                    resp = requests.post(url, headers=headers, json=payload)
+                    data = resp.json()
+
+                    from PIL import Image, UnidentifiedImageError
+                    import io
+
+                    if "images" in data and data["images"]:
+                        image_url = data["images"][0]["imageUrl"]  # pick the top result
+                        img_filename = f"graph_{int(time.time())}.png"
+                        img_path = os.path.abspath(img_filename)
+
+                        try:
+                            # Download
+                            img_data = requests.get(image_url, timeout=10).content
+
+                            # Verify before saving
+                            img_buffer = io.BytesIO(img_data)
+                            try:
+                                with Image.open(img_buffer) as test_img:
+                                    test_img.verify()  # quick integrity check
+                            except (UnidentifiedImageError, OSError) as img_err:
+                                print(f"DEBUG: Skipping invalid image from {image_url}: {img_err}")
+                                continue  # skip to next image/component
+
+                            # If valid, reopen for saving
+                            img_buffer.seek(0)
+                            with Image.open(img_buffer) as img:
+                                img.save(img_path, "PNG", optimize=True)
+
+                            if os.path.exists(img_path):
+                                content_sections.append({
+                                    "type": "image",
+                                    "content": img_path,
+                                    "editable": True,
+                                    "component_name": component,
+                                    "graph_topic": graph_topic,
+                                    "graph_type": graph_type
+                                })
+                                print(f"DEBUG: Successfully saved and added valid image: {img_path}")
+                            else:
+                                print(f"DEBUG: Image file not created: {img_path}")
+                        except Exception as e:
+                            print(f"DEBUG: Graph generation failed: {e}")
+
+                except Exception as e:
+                            print(f"DEBUG: Graph generation failed: {e}")
+
+
+                        
+                        # End component span
+        component_span.update(
+                output={"content_sections_added": len([cs for cs in content_sections if cs.get("component_name") == component])}
+                        )
+        component_span.end()
 
         slides_data.append({
             "title": slide_title.strip(),
